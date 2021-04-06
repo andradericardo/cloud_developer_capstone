@@ -1,0 +1,275 @@
+service:
+  name: serverless-capstone
+
+plugins:
+  - serverless-webpack
+  - serverless-iam-roles-per-function
+
+provider:
+  name: aws
+  runtime: nodejs12.x
+
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'sa-east-1'}
+
+  # TODO: Update here
+  environment:
+    GROCERIES_TABLE: Groceries-${self:provider.stage}
+    GROCERIES_BY_USER_INDEX: GroceriesByUserIndex
+    ATTACHMENTS_S3_BUCKET: andrade-groceries-attachments-${self:provider.stage}
+    SIGNED_URL_EXPIRATION: 300
+    AUTH_0_JWKS_URL: https://dev-a2n6kf8z.us.auth0.com/.well-known/jwks.json
+
+  tracing:
+    lambda: true
+    apiGateway: true
+
+functions:
+
+  Auth:
+    handler: src/lambda/auth/auth0Authorizer.handler
+
+  # DONE: Configure this function
+  GetGroceries:
+    handler: src/lambda/http/getGroceries.handler
+    events:
+      - http:
+          method: get
+          path: groceries
+          cors: true
+          authorizer: Auth
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:Query
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.GROCERIES_TABLE}/index/${self:provider.environment.GROCERIES_BY_USER_INDEX}
+      - Effect: Allow
+        Action:
+          - xray:GetSamplingRules
+          - xray:GetSamplingTargets
+          - xray:GetSamplingStatisticSummaries
+          - xray:BatchGetTraces
+          - xray:GetServiceGraph
+          - xray:GetTraceGraph
+          - xray:GetTraceSummaries
+          - xray:GetGroups
+          - xray:GetGroup
+          - xray:PutTraceSegments
+        Resource:
+          - "*"
+
+
+  # DONE: Configure this function
+  CreateGrocerie:
+    handler: src/lambda/http/createGrocerie.handler
+    events:
+      - http:
+          method: post
+          path: groceries
+          cors: true
+          authorizer: Auth
+          request:
+            schema:
+              application/json: ${file(src/schemas/createGrocerie.json)}
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:PutItem
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.GROCERIES_TABLE}
+      - Effect: Allow
+        Action:
+          - xray:GetSamplingRules
+          - xray:GetSamplingTargets
+          - xray:GetSamplingStatisticSummaries
+          - xray:BatchGetTraces
+          - xray:GetServiceGraph
+          - xray:GetTraceGraph
+          - xray:GetTraceSummaries
+          - xray:GetGroups
+          - xray:GetGroup
+          - xray:PutTraceSegments
+        Resource:
+          - "*"
+
+
+  # DONE: Configure this function
+  UpdateGrocerie:
+    handler: src/lambda/http/updateGrocerie.handler
+    events:
+      - http:
+          method: patch
+          path: groceries/{grocerieId}
+          cors: true
+          authorizer: Auth
+          request:
+            schema:
+              application/json: ${file(src/schemas/updateGrocerie.json)}
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:UpdateItem
+          - dynamodb:GetItem
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.GROCERIES_TABLE}
+      - Effect: Allow
+        Action:
+          - xray:GetSamplingRules
+          - xray:GetSamplingTargets
+          - xray:GetSamplingStatisticSummaries
+          - xray:BatchGetTraces
+          - xray:GetServiceGraph
+          - xray:GetTraceGraph
+          - xray:GetTraceSummaries
+          - xray:GetGroups
+          - xray:GetGroup
+          - xray:PutTraceSegments
+        Resource:
+          - "*"
+    
+
+
+
+  # DONE: Configure this function
+  DeleteGrocerie:
+    handler: src/lambda/http/deleteGrocerie.handler
+    events:
+      - http:
+          method: delete
+          path: groceries/{grocerieId}
+          cors: true
+          authorizer: Auth
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:DeleteItem
+          - dynamodb:GetItem
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.GROCERIES_TABLE}
+      - Effect: Allow
+        Action:
+          - xray:GetSamplingRules
+          - xray:GetSamplingTargets
+          - xray:GetSamplingStatisticSummaries
+          - xray:BatchGetTraces
+          - xray:GetServiceGraph
+          - xray:GetTraceGraph
+          - xray:GetTraceSummaries
+          - xray:GetGroups
+          - xray:GetGroup
+          - xray:PutTraceSegments
+        Resource:
+          - "*"
+
+
+
+  # DONE: Configure this function
+  GenerateUploadUrl:
+    handler: src/lambda/http/generateUploadUrl.handler
+    events:
+      - http:
+          method: post
+          path: groceries/{grocerieId}/attachment
+          cors: true
+          authorizer: Auth
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - s3:PutObject
+        Resource: arn:aws:s3:::${self:provider.environment.ATTACHMENTS_S3_BUCKET}/*
+      - Effect: Allow
+        Action:
+          - dynamodb:UpdateItem
+          - dynamodb:GetItem
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.GROCERIES_TABLE}
+      - Effect: Allow
+        Action:
+          - xray:GetSamplingRules
+          - xray:GetSamplingTargets
+          - xray:GetSamplingStatisticSummaries
+          - xray:BatchGetTraces
+          - xray:GetServiceGraph
+          - xray:GetTraceGraph
+          - xray:GetTraceSummaries
+          - xray:GetGroups
+          - xray:GetGroup
+          - xray:PutTraceSegments
+        Resource:
+          - "*"
+  
+
+resources:
+  Resources:
+    # DONE: Add any necessary AWS resources
+
+    # Specify API Gateway resource
+    GatewayResponseDefault4XX:
+      Type: AWS::ApiGateway::GatewayResponse
+      Properties:
+        ResponseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+          gatewayresponse.header.Access-Control-Allow-Methods: "'GET,OPTIONS,POST'"
+        ResponseType: DEFAULT_4XX
+        RestApiId:
+          Ref: ApiGatewayRestApi
+
+
+    # Specify DynamoDB resource
+    GroceriesTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: grocerieId
+            AttributeType: S
+          - AttributeName: userId
+            AttributeType: S
+          - AttributeName: createdAt
+            AttributeType: S
+        KeySchema:
+          - AttributeName: grocerieId
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+        TableName: ${self:provider.environment.GROCERIES_TABLE}
+        GlobalSecondaryIndexes:
+          - IndexName: ${self:provider.environment.GROCERIES_BY_USER_INDEX}
+            KeySchema:
+              - AttributeName: userId
+                KeyType: HASH
+              - AttributeName: createdAt
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+    
+
+    # Specify S3 bucket resource
+    AttachmentsBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:provider.environment.ATTACHMENTS_S3_BUCKET}
+        CorsConfiguration:
+          CorsRules:
+            - AllowedOrigins:
+                - '*'
+              AllowedHeaders:
+                - '*'
+              AllowedMethods:
+                - GET
+                - PUT
+                - POST
+                - DELETE
+                - HEAD
+              MaxAge: 3000
+
+    # Specify S3 attachment policy resource
+    # See https://andrewchaa.me.uk/technical/upload-a-file-to-s3-bucket-using-serverless-lambda-in-c/
+    AttachmentsBucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        PolicyDocument:
+          Id: MyPolicy
+          Version: "2012-10-17"
+          Statement:
+            - Sid: PublicReadForGetBucketObjects
+              Effect: Allow
+              Principal: '*'
+              Action: 's3:GetObject'
+              Resource: 'arn:aws:s3:::${self:provider.environment.ATTACHMENTS_S3_BUCKET}/*'
+        Bucket: !Ref AttachmentsBucket
